@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GRVT Perps Heatmap</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0e11;
+      --header-bg: #141720;
+      --border: #2b2f36;
+      --text: #eaecef;
+      --text-dim: #848e9c;
+      --accent: #c6a227;
+      --pill-bg: #1e2329;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .logo-icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    .logo-badge {
+      background: var(--accent);
+      color: #000;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 3px;
+      letter-spacing: 1px;
+    }
+
+    .sep {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .pill-group {
+      display: flex;
+      background: var(--pill-bg);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 1px;
+      flex-shrink: 0;
+    }
+
+    .pill {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .pill.active {
+      background: #2b2f36;
+      color: var(--text);
+    }
+
+    .pill:hover:not(.active) { color: var(--text); }
+
+    .status {
+      font-size: 11px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .trade-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 12px;
+      border: 1px solid rgba(80, 255, 140, 0.95);
+      border-radius: 6px;
+      background: linear-gradient(180deg, #4dff90, #10c95a);
+      color: #03140a;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+      box-shadow: 0 0 0 1px rgba(9, 42, 21, 0.65), 0 0 14px rgba(80, 255, 140, 0.55), 0 0 28px rgba(20, 201, 90, 0.35);
+      animation: tradePulse 1.4s ease-in-out infinite;
+      transition: border-color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s;
+    }
+
+    .trade-link:hover {
+      border-color: #90ffb7;
+      background: linear-gradient(180deg, #71ffab, #1fe06b);
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 0 0 0 1px rgba(9, 42, 21, 0.8), 0 0 18px rgba(80, 255, 140, 0.8), 0 0 36px rgba(20, 201, 90, 0.5);
+    }
+
+    .trade-link:focus-visible {
+      outline: 2px solid #baffcf;
+      outline-offset: 2px;
+    }
+
+    @keyframes tradePulse {
+      0%, 100% {
+        box-shadow: 0 0 0 1px rgba(9, 42, 21, 0.65), 0 0 14px rgba(80, 255, 140, 0.55), 0 0 28px rgba(20, 201, 90, 0.35);
+      }
+      50% {
+        box-shadow: 0 0 0 1px rgba(9, 42, 21, 0.8), 0 0 22px rgba(110, 255, 160, 0.95), 0 0 44px rgba(32, 224, 107, 0.7);
+      }
+    }
+
+    .search-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      font-size: 14px;
+      pointer-events: none;
+      line-height: 1;
+    }
+
+    .search {
+      background: var(--pill-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 5px 10px 5px 27px;
+      font-size: 12px;
+      width: 160px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search::placeholder { color: var(--text-dim); }
+    .search:focus { border-color: var(--accent); }
+
+    #map-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #heatmap {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .cell { cursor: pointer; }
+
+    .cell:hover rect {
+      filter: brightness(1.25);
+      transition: filter 0.1s;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      gap: 14px;
+      z-index: 10;
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { color: var(--text-dim); font-size: 14px; }
+
+    #tooltip {
+      position: fixed;
+      pointer-events: none;
+      z-index: 999;
+      display: none;
+      background: #1a1f27;
+      border: 1px solid #353a44;
+      border-radius: 8px;
+      padding: 12px 15px;
+      min-width: 190px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+    }
+
+    .tt-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tt-kind {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: #2b2f36;
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+
+    .tt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .tt-label { color: var(--text-dim); }
+    .tt-val { color: var(--text); font-weight: 500; }
+    .tt-val.pos { color: #00b15b; }
+    .tt-val.neg { color: #cf304a; }
+
+    .tt-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 8px 0;
+    }
+
+    .tt-hint {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    .legend-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .legend-label {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .legend-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      width: 100px;
+    }
+
+    .legend-bar span {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none">
+        <polygon points="12,2 22,7 22,17 12,22 2,17 2,7" fill="#c6a227" opacity="0.9"/>
+        <polygon points="12,5 19,9 19,15 12,19 5,15 5,9" fill="#0b0e11"/>
+        <polygon points="12,8 16,10.5 16,15.5 12,18 8,15.5 8,10.5" fill="#c6a227" opacity="0.6"/>
+      </svg>
+      GRVT Perps
+      <span class="logo-badge">LIVE</span>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="pill-group" id="size-group">
+      <button class="pill active" data-size="pct">24H %</button>
+      <button class="pill" data-size="volume">Volume</button>
+      <button class="pill" data-size="oi">OI</button>
+      <button class="pill" data-size="funding">Funding</button>
+    </div>
+
+    <div class="pill-group" id="vol-group">
+      <button class="pill active" data-vol="all">All</button>
+      <button class="pill" data-vol="gt10m">Pairs &gt;10M</button>
+      <button class="pill" data-vol="1mto10m">Pairs 1-10M</button>
+      <button class="pill" data-vol="lt1m">Pairs &lt;1M</button>
+    </div>
+
+    <div class="legend-wrap">
+      <span class="legend-label">-15%</span>
+      <div class="legend-bar">
+        <span style="background:#cf304a"></span>
+        <span style="background:#a03030"></span>
+        <span style="background:#7b2828"></span>
+        <span style="background:#4a2222"></span>
+        <span style="background:#281a1a"></span>
+        <span style="background:#1a281a"></span>
+        <span style="background:#004d28"></span>
+        <span style="background:#006e38"></span>
+        <span style="background:#008a47"></span>
+        <span style="background:#00b15b"></span>
+      </div>
+      <span class="legend-label">+15%</span>
+    </div>
+
+    <span class="status" id="status">Loading...</span>
+
+    <div class="header-actions">
+      <a class="trade-link" href="https://grvt.io/?ref=E1T5I7F" target="_blank" rel="noopener noreferrer">
+        Trade on GRVT -10% fees
+      </a>
+      <div class="search-wrap">
+        <span class="search-icon">&#9906;</span>
+        <input class="search" id="search" type="text" placeholder="Search symbol">
+      </div>
+    </div>
+  </header>
+
+  <div id="map-container">
+    <div class="loading-overlay" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading GRVT market data...</div>
+    </div>
+    <svg id="heatmap"></svg>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <script>
+    const GRVT_TRADE_BASE = 'https://grvt.io/exchange/perpetual/';
+    const GRVT_API = 'api';
+    const REFRESH_MS = 30_000;
+    const BATCH_SIZE = 20;
+
+    let allData = [];
+    let volumeFilter = 'all';
+    let searchTerm = '';
+    let sizeBy = 'pct';
+    let refreshTimer = null;
+    let lastUpdatedAt = null;
+
+    function getColor(pct) {
+      if (pct >= 15) return '#00c76a';
+      if (pct >= 10) return '#00b15b';
+      if (pct >= 5) return '#008a47';
+      if (pct >= 2) return '#006e38';
+      if (pct >= 0.5) return '#004d28';
+      if (pct >= 0) return '#1a2820';
+      if (pct >= -0.5) return '#281a1a';
+      if (pct >= -2) return '#4a2222';
+      if (pct >= -5) return '#7b2828';
+      if (pct >= -10) return '#a03030';
+      if (pct >= -15) return '#c02828';
+      return '#cf304a';
+    }
+
+    function formatPct(pct) {
+      const sign = pct >= 0 ? '+' : '';
+      return `${sign}${pct.toFixed(2)}%`;
+    }
+
+    function formatPrice(price) {
+      const p = parseFloat(price);
+      if (isNaN(p) || p === 0) return '-';
+      if (p >= 10000) return '$' + p.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      if (p >= 100) return '$' + p.toFixed(2);
+      if (p >= 1) return '$' + p.toFixed(3);
+      if (p >= 0.01) return '$' + p.toFixed(4);
+      return '$' + p.toFixed(6);
+    }
+
+    function formatVolume(vol) {
+      if (vol >= 1e9) return '$' + (vol / 1e9).toFixed(2) + 'B';
+      if (vol >= 1e6) return '$' + (vol / 1e6).toFixed(2) + 'M';
+      if (vol >= 1e3) return '$' + (vol / 1e3).toFixed(1) + 'K';
+      if (vol > 0) return '$' + vol.toFixed(0);
+      return '-';
+    }
+
+    function formatFunding(rate) {
+      const value = Number(rate) || 0;
+      const sign = value >= 0 ? '+' : '';
+      return `${sign}${(value * 100).toFixed(4)}%`;
+    }
+
+    function getSizeLabel() {
+      if (sizeBy === 'volume') return 'Volume';
+      if (sizeBy === 'oi') return 'OI';
+      if (sizeBy === 'funding') return 'Funding';
+      return '24H %';
+    }
+
+    function getSizeValue(item) {
+      let value = 0;
+      if (sizeBy === 'volume') value = item.volume;
+      else if (sizeBy === 'oi') value = item.openInterestUsd;
+      else if (sizeBy === 'funding') value = Math.abs(item.fundingRate || 0) * 10000;
+      else value = Math.abs(item.pct || 0);
+      return Number.isFinite(value) ? Math.max(value, 0) : 0;
+    }
+
+    function getNodeWeight(item) {
+      if (sizeBy === 'funding') return Math.max(getSizeValue(item), 0.05);
+      return Math.max(getSizeValue(item), sizeBy === 'pct' ? 0.1 : 1);
+    }
+
+    function formatSizeValue(item) {
+      if (sizeBy === 'volume') return formatVolume(item.volume);
+      if (sizeBy === 'oi') return formatVolume(item.openInterestUsd);
+      if (sizeBy === 'funding') return formatFunding(item.fundingRate);
+      return formatPct(item.pct);
+    }
+
+    function formatDetailValue(item) {
+      if (sizeBy === 'pct') return formatPrice(item.lastPrice);
+      return formatPct(item.pct);
+    }
+
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      if (!lastUpdatedAt) return;
+      const time = lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      statusEl.textContent = `${allData.length} pairs | Size: ${getSizeLabel()} | ${time}`;
+    }
+
+    async function apiPost(endpoint, body) {
+      const response = await fetch(`${GRVT_API}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status} on ${endpoint}`);
+      return response.json();
+    }
+
+    async function fetchInstruments() {
+      const data = await apiPost('all_instruments', { is_active: true });
+      return (data.result || []).filter(
+        instrument => instrument.kind === 'PERPETUAL' && ['USDT', 'USDC'].includes(instrument.quote)
+      );
+    }
+
+    async function fetchTicker(instrument) {
+      try {
+        const data = await apiPost('ticker', { instrument });
+        return data.result || null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchAllTickers(instruments) {
+      const results = [];
+      for (let i = 0; i < instruments.length; i += BATCH_SIZE) {
+        const batch = instruments.slice(i, i + BATCH_SIZE);
+        const settled = await Promise.allSettled(
+          batch.map(inst => fetchTicker(inst.instrument))
+        );
+
+        settled.forEach((entry, index) => {
+          const ticker = entry.status === 'fulfilled' ? entry.value : null;
+          if (!ticker) return;
+
+          const open = parseFloat(ticker.open_price) || 0;
+          const last = parseFloat(ticker.last_price) || 0;
+          const pct = open > 0 ? ((last - open) / open) * 100 : 0;
+          const buyVol = parseFloat(ticker.buy_volume_24h_q) || 0;
+          const sellVol = parseFloat(ticker.sell_volume_24h_q) || 0;
+          const openInterest = parseFloat(ticker.open_interest) || 0;
+
+          results.push({
+            instrument: batch[index].instrument,
+            base: batch[index].base,
+            quote: batch[index].quote,
+            pct,
+            lastPrice: last,
+            openPrice: open,
+            highPrice: parseFloat(ticker.high_price) || last,
+            lowPrice: parseFloat(ticker.low_price) || last,
+            volume: buyVol + sellVol,
+            fundingRate: parseFloat(ticker.funding_rate_8h_curr) || 0,
+            openInterest,
+            openInterestUsd: openInterest * last,
+          });
+        });
+      }
+      return results;
+    }
+
+    function getFilteredData() {
+      return allData.filter(item => {
+        if (volumeFilter === 'gt10m' && item.volume <= 10_000_000) return false;
+        if (volumeFilter === '1mto10m' && (item.volume < 1_000_000 || item.volume > 10_000_000)) return false;
+        if (volumeFilter === 'lt1m' && item.volume >= 1_000_000) return false;
+        if (searchTerm && !item.base.toLowerCase().includes(searchTerm)) return false;
+        return true;
+      });
+    }
+
+    function renderTreemap() {
+      const data = getFilteredData();
+      const container = document.getElementById('map-container');
+      const svg = d3.select('#heatmap');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      svg.attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+      svg.selectAll('*').remove();
+
+      if (data.length === 0) {
+        svg.append('text')
+          .attr('x', width / 2)
+          .attr('y', height / 2)
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#848e9c')
+          .attr('font-size', '14px')
+          .text('No instruments match your filters');
+        return;
+      }
+
+      const root = d3.hierarchy({ children: data })
+        .sum(node => getNodeWeight(node))
+        .sort((a, b) => b.value - a.value);
+
+      d3.treemap()
+        .size([width, height])
+        .tile(d3.treemapResquarify)
+        .padding(2)(root);
+
+      const cells = svg.selectAll('g.cell')
+        .data(root.leaves())
+        .join('g')
+        .attr('class', 'cell')
+        .attr('transform', d => `translate(${d.x0},${d.y0})`)
+        .on('click', (_, d) => {
+          const url = GRVT_TRADE_BASE + d.data.base + '-' + d.data.quote;
+          window.open(url, '_blank', 'noopener');
+        })
+        .on('mouseenter', (event, d) => showTooltip(event, d))
+        .on('mousemove', event => moveTooltip(event))
+        .on('mouseleave', () => hideTooltip());
+
+      cells.append('rect')
+        .attr('width', d => Math.max(d.x1 - d.x0, 0))
+        .attr('height', d => Math.max(d.y1 - d.y0, 0))
+        .attr('fill', d => getColor(d.data.pct))
+        .attr('rx', 2);
+
+      cells.each(function (d) {
+        const group = d3.select(this);
+        const width = d.x1 - d.x0;
+        const height = d.y1 - d.y0;
+        if (width < 28 || height < 18) return;
+
+        const centerX = width / 2;
+        const baseSize = Math.min(14, Math.max(8, width / 6.5));
+        const metricSize = sizeBy === 'pct'
+          ? Math.min(13, Math.max(8, width / 7.5))
+          : Math.min(11, Math.max(7, width / 9));
+        const detailSize = Math.min(10, Math.max(7, width / 10));
+        const metricText = formatSizeValue(d.data);
+        const detailText = formatDetailValue(d.data);
+
+        if (height >= 65 && width >= 65) {
+          group.append('text')
+            .attr('x', centerX)
+            .attr('y', height * 0.28)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', 'rgba(255,255,255,0.88)')
+            .attr('font-size', baseSize + 'px')
+            .attr('font-weight', '600')
+            .text(d.data.base);
+
+          group.append('text')
+            .attr('x', centerX)
+            .attr('y', height * 0.52)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', '#fff')
+            .attr('font-size', metricSize + 'px')
+            .attr('font-weight', '700')
+            .text(metricText);
+
+          group.append('text')
+            .attr('x', centerX)
+            .attr('y', height * 0.76)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', 'rgba(255,255,255,0.55)')
+            .attr('font-size', detailSize + 'px')
+            .text(detailText);
+        } else if (height >= 36 && width >= 42) {
+          group.append('text')
+            .attr('x', centerX)
+            .attr('y', height * 0.34)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', 'rgba(255,255,255,0.85)')
+            .attr('font-size', Math.min(12, baseSize) + 'px')
+            .attr('font-weight', '600')
+            .text(d.data.base);
+
+          group.append('text')
+            .attr('x', centerX)
+            .attr('y', height * 0.66)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', '#fff')
+            .attr('font-size', metricSize + 'px')
+            .attr('font-weight', '700')
+            .text(metricText);
+        } else {
+          const labelSize = Math.min(10, Math.max(7, Math.min(width, height) / 3.2));
+          group.append('text')
+            .attr('x', centerX)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('fill', 'rgba(255,255,255,0.75)')
+            .attr('font-size', labelSize + 'px')
+            .attr('font-weight', '600')
+            .text(d.data.base);
+        }
+      });
+    }
+
+    function showTooltip(event, d) {
+      const { pct, base, quote, lastPrice, highPrice, lowPrice, volume, fundingRate, openInterestUsd } = d.data;
+      const cls = pct >= 0 ? 'pos' : 'neg';
+      const sizeRow = sizeBy === 'pct' ? '' : `
+        <div class="tt-row">
+          <span class="tt-label">${getSizeLabel()}</span>
+          <span class="tt-val">${formatSizeValue(d.data)}</span>
+        </div>
+      `;
+
+      document.getElementById('tooltip').innerHTML = `
+        <div class="tt-title">
+          ${base}/${quote} Perp
+          <span class="tt-kind">PERPETUAL</span>
+        </div>
+        <div class="tt-row">
+          <span class="tt-label">Last Price</span>
+          <span class="tt-val">${formatPrice(lastPrice)}</span>
+        </div>
+        <div class="tt-row">
+          <span class="tt-label">24H Change</span>
+          <span class="tt-val ${cls}">${formatPct(pct)}</span>
+        </div>
+        ${sizeRow}
+        <div class="tt-row">
+          <span class="tt-label">24H High</span>
+          <span class="tt-val">${formatPrice(highPrice)}</span>
+        </div>
+        <div class="tt-row">
+          <span class="tt-label">24H Low</span>
+          <span class="tt-val">${formatPrice(lowPrice)}</span>
+        </div>
+        <div class="tt-row">
+          <span class="tt-label">24H Volume</span>
+          <span class="tt-val">${formatVolume(volume)}</span>
+        </div>
+        <div class="tt-row">
+          <span class="tt-label">Open Interest</span>
+          <span class="tt-val">${formatVolume(openInterestUsd)}</span>
+        </div>
+        <div class="tt-row">
+          <span class="tt-label">Funding (8h)</span>
+          <span class="tt-val ${fundingRate >= 0 ? 'pos' : 'neg'}">${(fundingRate * 100).toFixed(4)}%</span>
+        </div>
+        <hr class="tt-divider">
+        <div class="tt-hint">Click to trade on GRVT -></div>
+      `;
+
+      document.getElementById('tooltip').style.display = 'block';
+      moveTooltip(event);
+    }
+
+    function moveTooltip(event) {
+      const tooltip = document.getElementById('tooltip');
+      const pad = 14;
+      let x = event.clientX + pad;
+      let y = event.clientY + pad;
+      const rect = tooltip.getBoundingClientRect();
+
+      if (x + rect.width > window.innerWidth - pad) x = event.clientX - rect.width - pad;
+      if (y + rect.height > window.innerHeight - pad) y = event.clientY - rect.height - pad;
+
+      tooltip.style.left = x + 'px';
+      tooltip.style.top = y + 'px';
+    }
+
+    function hideTooltip() {
+      document.getElementById('tooltip').style.display = 'none';
+    }
+
+    async function loadData() {
+      const statusEl = document.getElementById('status');
+      const loadingEl = document.getElementById('loading');
+
+      try {
+        statusEl.textContent = 'Fetching instruments...';
+        const instruments = await fetchInstruments();
+
+        statusEl.textContent = `Fetching ${instruments.length} tickers...`;
+        allData = await fetchAllTickers(instruments);
+
+        loadingEl.style.display = 'none';
+        lastUpdatedAt = new Date();
+        updateStatus();
+        renderTreemap();
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Error';
+        loadingEl.style.display = 'flex';
+        loadingEl.innerHTML = `
+          <div style="color:#cf304a;font-size:14px;margin-bottom:8px">Failed to load market data</div>
+          <div style="color:#848e9c;font-size:12px;margin-bottom:16px">${err.message}</div>
+          <button onclick="init()" style="padding:7px 20px;background:#2b2f36;border:1px solid #3a3f48;
+            color:#eaecef;border-radius:6px;cursor:pointer;font-size:13px">Retry</button>
+        `;
+      }
+    }
+
+    function scheduleRefresh() {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        await loadData();
+        scheduleRefresh();
+      }, REFRESH_MS);
+    }
+
+    async function init() {
+      const loadingEl = document.getElementById('loading');
+      loadingEl.style.display = 'flex';
+      loadingEl.innerHTML = '<div class="spinner"></div><div class="loading-text">Loading GRVT market data...</div>';
+      await loadData();
+      scheduleRefresh();
+    }
+
+    document.getElementById('size-group').addEventListener('click', event => {
+      const button = event.target.closest('[data-size]');
+      if (!button || button.dataset.size === sizeBy) return;
+      document.querySelectorAll('#size-group .pill').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      sizeBy = button.dataset.size;
+      updateStatus();
+      renderTreemap();
+    });
+
+    document.getElementById('vol-group').addEventListener('click', event => {
+      const button = event.target.closest('[data-vol]');
+      if (!button || button.dataset.vol === volumeFilter) return;
+      document.querySelectorAll('#vol-group .pill').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      volumeFilter = button.dataset.vol;
+      renderTreemap();
+    });
+
+    document.getElementById('search').addEventListener('input', event => {
+      searchTerm = event.target.value.trim().toLowerCase();
+      renderTreemap();
+    });
+
+    window.addEventListener('resize', renderTreemap);
+
+    init();
+  </script>
+</body>
+</html>
